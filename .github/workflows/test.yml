@@ -14,8 +14,31 @@ jobs:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
         version:
-          - 14.3.rel1
-          - 9-2019-q4-major
+          - 14.3.rel1        # modern: all 4 runner platforms
+          - 10.3-2021.10     # newest gnu-rm: win, linux-amd64, linux-arm64, darwin-amd64
+          - 9-2019-q4-major  # gnu-rm: win, linux-amd64, linux-arm64, darwin-amd64
+          - 7-2017-q4-major  # mid-era gnu-rm: win, linux-amd64, darwin-amd64
+          - 5-2016-q1-update # oldest gnu-rm: linux-amd64, darwin-amd64
+        # Skip combos that ARM never published a build for. The exclude
+        # list is mechanically derived from internal/arm/legacy.go in
+        # the armup repo — every gnu-rm entry's platform map.
+        exclude:
+          # No gnu-rm release shipped a darwin-arm64 build. ARM only
+          # added Apple Silicon support in the modern arm-gnu-toolchain
+          # line. macos-latest is M-series, so any gnu-rm version
+          # there has nothing to install.
+          - { os: macos-latest, version: 10.3-2021.10 }
+          - { os: macos-latest, version: 9-2019-q4-major }
+          - { os: macos-latest, version: 7-2017-q4-major }
+          - { os: macos-latest, version: 5-2016-q1-update }
+          # ARM only began shipping aarch64-linux from 9.x; pre-9 gnu-rm
+          # versions are linux-amd64-only on Linux.
+          - { os: ubuntu-24.04-arm, version: 7-2017-q4-major }
+          - { os: ubuntu-24.04-arm, version: 5-2016-q1-update }
+          # 5-2016-q1-update and 5-2016-q2-update were Linux + macOS
+          # only on developer.arm.com (Windows was a Nullsoft installer
+          # we can't extract, intentionally omitted from the catalog).
+          - { os: windows-latest, version: 5-2016-q1-update }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
