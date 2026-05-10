@@ -1,0 +1,75 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: ${{ matrix.os }} / ${{ matrix.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+        version:
+          - 14.3.rel1
+          - 9-2019-q4-major
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain via setup-armup
+        id: armup
+        uses: ./
+        with:
+          version: ${{ matrix.version }}
+
+      - name: arm-none-eabi-gcc resolves and runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          which arm-none-eabi-gcc
+          arm-none-eabi-gcc --version
+          # The version banner should mention the requested release
+          # (e.g. "GNU Arm Embedded Toolchain 14.3.rel1" or
+          # "GNU Tools for Arm Embedded Processors 9-2019-q4-major").
+          arm-none-eabi-gcc --version | head -1 | grep -qF '${{ matrix.version }}'
+
+      - name: bin-dir output is set and exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${{ steps.armup.outputs.bin-dir }}"
+          test -d "${{ steps.armup.outputs.bin-dir }}"
+
+      - name: compile a tiny program
+        shell: bash
+        run: |
+          cat > hello.c <<'EOF'
+          int main(void) { return 0; }
+          EOF
+          arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -nostartfiles \
+            -nostdlib -Wl,--no-warn-rwx-segments -o hello.elf hello.c \
+            || arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb -nostartfiles \
+               -nostdlib -o hello.elf hello.c
+          arm-none-eabi-size hello.elf
+
+  cache-roundtrip:
+    name: cache hits on second run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: First install (populates cache)
+        uses: ./
+        with:
+          version: 14.3.rel1
+      - name: Second install (should hit cache; armup reports 'already installed')
+        id: second
+        uses: ./
+        with:
+          version: 14.3.rel1
+      - name: arm-none-eabi-gcc still works
+        shell: bash
+        run: arm-none-eabi-gcc --version

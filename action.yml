@@ -1,0 +1,136 @@
+name: 'Setup armup'
+description: 'Install an arm-none-eabi GCC toolchain via armup and add it to PATH'
+author: 'mihnen'
+branding:
+  icon: 'cpu'
+  color: 'blue'
+
+inputs:
+  version:
+    description: |
+      Toolchain version to install (e.g. `14.3.rel1`, `9-2019-q4-major`).
+      Run `armup available` locally to see the catalog.
+    required: true
+  armup-version:
+    description: |
+      armup release tag to use (e.g. `v1.3.0`). Defaults to the latest
+      release on github.com/mihnen/armup.
+    required: false
+    default: 'latest'
+  cache:
+    description: |
+      Cache the installed toolchain across workflow runs. Cache key is
+      derived from the toolchain version, armup version, OS, and arch.
+    required: false
+    default: 'true'
+
+outputs:
+  version:
+    description: 'The toolchain version that was installed.'
+    value: ${{ inputs.version }}
+  bin-dir:
+    description: 'Absolute path to the directory containing arm-none-eabi-* binaries.'
+    value: ${{ steps.install.outputs.bin-dir }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Resolve runner platform
+      id: platform
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "${{ runner.os }}" in
+          Linux)   os=linux;   data="$HOME/.local/share/armup" ;;
+          macOS)   os=darwin;  data="$HOME/Library/Application Support/armup" ;;
+          Windows) os=windows; data="$LOCALAPPDATA/armup" ;;
+          *) echo "::error::unsupported runner.os: ${{ runner.os }}" ; exit 1 ;;
+        esac
+        case "${{ runner.arch }}" in
+          X64)   arch=amd64 ;;
+          ARM64) arch=arm64 ;;
+          *) echo "::error::unsupported runner.arch: ${{ runner.arch }}" ; exit 1 ;;
+        esac
+        ext=tar.gz
+        [ "$os" = windows ] && ext=zip
+        {
+          echo "os=$os"
+          echo "arch=$arch"
+          echo "ext=$ext"
+          echo "data-dir=$data"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Resolve armup release tag
+      id: armup-tag
+      shell: bash
+      run: |
+        set -euo pipefail
+        tag='${{ inputs.armup-version }}'
+        if [ "$tag" = latest ]; then
+          tag=$(curl -fsSL https://api.github.com/repos/mihnen/armup/releases/latest | jq -r .tag_name)
+        fi
+        if [ -z "$tag" ] || [ "$tag" = null ]; then
+          echo "::error::could not resolve armup release tag"
+          exit 1
+        fi
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+    - name: Restore cached toolchain
+      id: cache
+      if: inputs.cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.platform.outputs.data-dir }}
+        key: armup-${{ runner.os }}-${{ runner.arch }}-${{ steps.armup-tag.outputs.tag }}-${{ inputs.version }}
+
+    - name: Download and verify armup binary
+      id: armup-bin
+      shell: bash
+      run: |
+        set -euo pipefail
+        os='${{ steps.platform.outputs.os }}'
+        arch='${{ steps.platform.outputs.arch }}'
+        ext='${{ steps.platform.outputs.ext }}'
+        tag='${{ steps.armup-tag.outputs.tag }}'
+
+        asset="armup-${tag}-${os}-${arch}.${ext}"
+        inner="armup-${tag}-${os}-${arch}"
+        url="https://github.com/mihnen/armup/releases/download/${tag}/${asset}"
+
+        tmp=$(mktemp -d)
+        echo "Downloading ${url}"
+        curl -fsSLo "${tmp}/${asset}" "${url}"
+        curl -fsSLo "${tmp}/SHA256SUMS" \
+          "https://github.com/mihnen/armup/releases/download/${tag}/SHA256SUMS"
+
+        ( cd "${tmp}" && grep "  ${asset}\$" SHA256SUMS | sha256sum -c - )
+
+        case "${ext}" in
+          tar.gz) tar -xzf "${tmp}/${asset}" -C "${tmp}" ;;
+          zip)    unzip -q "${tmp}/${asset}" -d "${tmp}" ;;
+        esac
+
+        bin_dir="${tmp}/${inner}"
+        if [ ! -e "${bin_dir}/armup" ] && [ ! -e "${bin_dir}/armup.exe" ]; then
+          echo "::error::armup binary not found in ${bin_dir}"
+          ls -la "${bin_dir}" || true
+          exit 1
+        fi
+
+        echo "${bin_dir}" >> "$GITHUB_PATH"
+        echo "bin=${bin_dir}" >> "$GITHUB_OUTPUT"
+
+    - name: Install toolchain
+      id: install
+      shell: bash
+      run: |
+        set -euo pipefail
+        # GITHUB_PATH updates apply on the next step; for this step we
+        # extend PATH explicitly so `armup` resolves.
+        export PATH='${{ steps.armup-bin.outputs.bin }}':"$PATH"
+
+        armup install '${{ inputs.version }}'
+        bin=$(armup which '${{ inputs.version }}' | tr -d '\r')
+        echo "$bin" >> "$GITHUB_PATH"
+        echo "bin-dir=$bin" >> "$GITHUB_OUTPUT"
+        echo "Toolchain bin: $bin"
