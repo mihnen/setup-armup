@@ -63,11 +63,18 @@ runs:
     - name: Resolve armup release tag
       id: armup-tag
       shell: bash
+      env:
+        # Authenticated requests have a 5000/hr limit per repo. macOS
+        # runners share an IP pool and routinely exceed the 60/hr
+        # unauthenticated limit otherwise.
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         tag='${{ inputs.armup-version }}'
         if [ "$tag" = latest ]; then
-          tag=$(curl -fsSL https://api.github.com/repos/mihnen/armup/releases/latest | jq -r .tag_name)
+          tag=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/mihnen/armup/releases/latest \
+            | jq -r .tag_name)
         fi
         if [ -z "$tag" ] || [ "$tag" = null ]; then
           echo "::error::could not resolve armup release tag"
