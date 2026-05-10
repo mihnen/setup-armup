@@ -18,7 +18,7 @@ jobs:
           - 9-2019-q4-major
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install toolchain via setup-armup
         id: armup
@@ -32,10 +32,10 @@ jobs:
           set -euo pipefail
           which arm-none-eabi-gcc
           arm-none-eabi-gcc --version
-          # The version banner should mention the requested release
-          # (e.g. "GNU Arm Embedded Toolchain 14.3.rel1" or
-          # "GNU Tools for Arm Embedded Processors 9-2019-q4-major").
-          arm-none-eabi-gcc --version | head -1 | grep -qF '${{ matrix.version }}'
+          # The version banner should mention the requested release.
+          # Match case-insensitively because GCC 14+ banners say
+          # "Arm GNU Toolchain 14.3.Rel1" with a capital R.
+          arm-none-eabi-gcc --version | head -1 | grep -qiF '${{ matrix.version }}'
 
       - name: bin-dir output is set and exists
         shell: bash
@@ -60,7 +60,7 @@ jobs:
     name: cache hits on second run
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: First install (populates cache)
         uses: ./
         with:

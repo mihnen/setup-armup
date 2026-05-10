@@ -44,7 +44,7 @@ jobs:
         toolchain: [14.3.rel1, 13.3.rel1, 9-2019-q4-major]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: mihnen/setup-armup@v1
         with:
           version: ${{ matrix.toolchain }}
