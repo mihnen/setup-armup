@@ -55,10 +55,21 @@ jobs:
           set -euo pipefail
           which arm-none-eabi-gcc
           arm-none-eabi-gcc --version
-          # The version banner should mention the requested release.
-          # Match case-insensitively because GCC 14+ banners say
-          # "Arm GNU Toolchain 14.3.Rel1" with a capital R.
-          arm-none-eabi-gcc --version | head -1 | grep -qiF '${{ matrix.version }}'
+          # Banner-content assertion. Most releases embed the release
+          # label (e.g. "Arm GNU Toolchain 14.3.Rel1" or "GNU Tools
+          # for Arm Embedded Processors 9-2019-q4-major"). The
+          # pre-2017-q1 quarter-named gnu-rm builds don't — they only
+          # print the GCC version, so we map those to the right token
+          # explicitly. -i so 14.x's "14.3.Rel1" matches "14.3.rel1".
+          v='${{ matrix.version }}'
+          case "$v" in
+            5-2016-q1-update) expect=5.3.1 ;;
+            5-2016-q2-update) expect=5.4.1 ;;
+            5-2016-q3-update) expect=5.4.1 ;;
+            6-2016-q4-major) expect=6.2.1 ;;
+            *) expect="$v" ;;
+          esac
+          arm-none-eabi-gcc --version | head -1 | grep -qiF "$expect"
 
       - name: bin-dir output is set and exists
         shell: bash
