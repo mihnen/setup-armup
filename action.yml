@@ -41,9 +41,9 @@ runs:
       run: |
         set -euo pipefail
         case "${{ runner.os }}" in
-          Linux)   os=linux;   data="$HOME/.local/share/armup" ;;
-          macOS)   os=darwin;  data="$HOME/Library/Application Support/armup" ;;
-          Windows) os=windows; data="$LOCALAPPDATA/armup" ;;
+          Linux)   os=linux;   data="$HOME/.local/share/arm-toolchains" ;;
+          macOS)   os=darwin;  data="$HOME/Library/Application Support/arm-toolchains" ;;
+          Windows) os=windows; data="$LOCALAPPDATA/arm-toolchains" ;;
           *) echo "::error::unsupported runner.os: ${{ runner.os }}" ; exit 1 ;;
         esac
         case "${{ runner.arch }}" in
